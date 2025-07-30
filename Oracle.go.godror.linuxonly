@@ -1,0 +1,55 @@
+//go:build linux
+
+package wcl_db
+
+import (
+	"database/sql"
+	"errors"
+	"fmt"
+	"regexp"
+	"strings"
+
+	_ "github.com/godror/godror"
+)
+
+type Oracle struct {
+	Username      string `json:"Username"`
+	Password      string `json:"Password"`
+	ConnectString string `json:"ConnectString"`
+
+	DB *sql.DB `json:"-"`
+}
+
+// `user="scott" password="tiger" connectString="dbhost:1521/orclpdb1"`
+func (o *Oracle) getDSN() (string, error) {
+	reg := regexp.MustCompile("\"|`")
+	if reg.MatchString(o.Username + o.Password + o.ConnectString) {
+		return "", errors.New("abnormal character found")
+	}
+	return fmt.Sprintf("user=\"%v\" password=\"%v\" connectString=\"%v\"",
+		o.Username, o.Password, o.ConnectString), nil
+}
+
+func (o *Oracle) EscapeString(value string) string {
+	value = strings.ReplaceAll(value, "'", "''")
+	value = strings.ReplaceAll(value, "&", "' || chr(38) || '")
+	return value
+	//return "'" + value + "'"
+}
+
+func (o *Oracle) InitDB() error {
+	dsn, err := o.getDSN()
+	if err != nil {
+		return err
+	}
+	db, err := sql.Open("godror", dsn)
+	if err != nil {
+		return err
+	}
+	err = db.Ping()
+	if err != nil {
+		return err
+	}
+	o.DB = db
+	return nil
+}

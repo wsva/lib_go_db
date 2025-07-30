@@ -1,0 +1,1 @@
+golang common lib of wsva (for database)
