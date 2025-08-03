@@ -51,6 +51,14 @@ func (d *DB) InitDB() error {
 			}
 		}
 		d.DB = d.SQLite.DB
+	case DBTypePostgreSQL:
+		if d.PostgreSQL.DB == nil {
+			err := d.PostgreSQL.InitDB()
+			if err != nil {
+				return err
+			}
+		}
+		d.DB = d.PostgreSQL.DB
 	default:
 		return fmt.Errorf("unsupported db type: %v", d.Type)
 	}
