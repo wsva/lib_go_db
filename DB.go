@@ -106,7 +106,7 @@ func (d *DB) QueryRow(query string, args ...any) (*sql.Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	return d.DB.QueryRow(query, args), nil
+	return d.DB.QueryRow(query, args...), nil
 }
 
 func (d *DB) Query(query string, args ...any) (*sql.Rows, error) {
@@ -114,7 +114,7 @@ func (d *DB) Query(query string, args ...any) (*sql.Rows, error) {
 	if err != nil {
 		return nil, err
 	}
-	return d.DB.Query(query, args)
+	return d.DB.Query(query, args...)
 }
 
 func (d *DB) Query2MapList(limit int, query string, args ...any) ([]any, error) {
@@ -202,7 +202,7 @@ func (d *DB) Exec(query string, args ...any) (sql.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	return d.DB.Exec(query, args)
+	return d.DB.Exec(query, args...)
 }
 
 func (d *DB) GetUUID() string {
