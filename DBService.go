@@ -6,24 +6,26 @@ import (
 )
 
 /*
-*************************执行请求*************************
+*************************execute request*************************
  */
 type SqlReq struct {
-	ID     string `json:"ID"`
-	SqlStr string `json:"SqlStr"`
-	Limit  int    `json:"Limit"`
+	ID    string
+	Query string
+	Args  []any
+	Limit int
 }
 
-func NewSqlReq(id, sqlstr string, limit int) *SqlReq {
+func NewSqlReq(id, sqlstr string, limit int, args ...any) *SqlReq {
 	return &SqlReq{
-		ID:     id,
-		SqlStr: sqlstr,
-		Limit:  limit,
+		ID:    id,
+		Query: sqlstr,
+		Args:  args,
+		Limit: limit,
 	}
 }
 
 /*
-*************************执行请求（批量）*************************
+*************************execute request (batch)*************************
  */
 type SqlReqBatch struct {
 	IDList []string `json:"IDList"`
@@ -40,20 +42,20 @@ func (s *SqlReqBatch) SqlReqList() []*SqlReq {
 }
 
 /*
-*************************查询结果*************************
+*************************result of query*************************
  */
 
 /*
-ID是为了标记查询结果是哪个数据库的查询结果
+ID indicates which database does the result come from
 */
 type QueryResult struct {
-	ID     string        `json:"ID"`
-	Result []interface{} `json:"Result"`
-	ErrMsg string        `json:"ErrMsg"`
+	ID     string
+	Result []any
+	ErrMsg string
 }
 
 /*
-*************************查询结果（批量）*************************
+*************************result of query (batch)*************************
  */
 type QueryResultList struct {
 	Data []QueryResult
@@ -68,15 +70,15 @@ func NewQueryResultList() *QueryResultList {
 }
 
 /*
-*************************服务端所有DB*************************
+*************************all databases*************************
  */
 //ID as key
 type DBMap map[string]*DB
 
-func (m DBMap) Query2MapList(req *SqlReq, limit int) ([]interface{}, error) {
+func (m DBMap) Query2MapList(req *SqlReq, limit int) ([]any, error) {
 	db, ok := m[req.ID]
 	if !ok {
 		return nil, errors.New("no database found, ID: " + req.ID)
 	}
-	return db.Query2MapList(req.SqlStr, limit)
+	return db.Query2MapList(limit, req.Query, req.Args...)
 }
