@@ -40,7 +40,7 @@ func (s URL) Parse() (*Config, error) {
 	}
 
 	cfg := &Config{
-		Driver: strings.ToLower(u.Scheme),
+		Driver: Driver(strings.ToLower(u.Scheme)),
 		Params: make(map[string]string),
 	}
 
@@ -64,7 +64,7 @@ func (s URL) Parse() (*Config, error) {
 
 	switch cfg.Driver {
 	case "postgresql", "postgres":
-		cfg.Driver = "postgres"
+		cfg.Driver = DriverPostgreSQL
 		if schema, ok := cfg.Params["schema"]; ok {
 			cfg.Schema = schema
 		}
@@ -86,7 +86,7 @@ func (s URL) Parse() (*Config, error) {
 			}
 		}
 	case "sqlite", "file":
-		cfg.Driver = "sqlite"
+		cfg.Driver = DriverSQLite
 		cfg.Database = strings.TrimPrefix(u.Path, "/")
 	case "oracle":
 		// service name or instance id

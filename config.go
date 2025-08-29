@@ -16,7 +16,7 @@ import (
 )
 
 type Config struct {
-	Driver   string
+	Driver   Driver
 	User     string
 	Password string
 	Host     string
@@ -31,11 +31,11 @@ type Config struct {
 func (d *Config) InitDB() error {
 	var err error
 	switch d.Driver {
-	case "postgres":
+	case DriverPostgreSQL:
 		dsn := fmt.Sprintf("host=%v port=%v user=%v password=%v dbname=%v",
 			d.Host, d.Port, d.User, d.Password, d.Database)
 		d.DB, err = sql.Open("postgres", dsn)
-	case "mysql":
+	case DriverMySQL:
 		dsn := fmt.Sprintf("%v:%v@%v:%v/%v",
 			d.User, d.Password, d.Host, d.Port, d.Database)
 		d.DB, err = sql.Open("mysql", dsn)
@@ -50,9 +50,9 @@ func (d *Config) InitDB() error {
 			d.DB.SetMaxOpenConns(10)
 			d.DB.SetMaxIdleConns(10)
 		}
-	case "sqlite", "file":
+	case DriverSQLite:
 		d.DB, err = sql.Open("sqlite", d.Database)
-	case "oracle":
+	case DriverOracle:
 		port, _ := strconv.ParseInt(d.Port, 10, 32)
 		connStr := ""
 		if v, ok := d.Params["service_name"]; ok && v != "" {
@@ -217,13 +217,13 @@ func (d *Config) Exec(query string, args ...any) (sql.Result, error) {
 func (d *Config) GetUUID() string {
 	var sqltext string
 	switch d.Driver {
-	case "mysql":
+	case DriverMySQL:
 		sqltext = "select uuid()"
-	case "oracle":
+	case DriverOracle:
 		sqltext = "select rawtohex(sys_guid()) from dual"
-	case "sqlite":
+	case DriverSQLite:
 		sqltext = "select hex(randomblob(16))"
-	case "postgres":
+	case DriverPostgreSQL:
 		sqltext = "select replace(uuid_generate_v4()::text, '-', '')"
 	default:
 		return strings.ReplaceAll(wl_uuid.New(), "-", "")
@@ -242,10 +242,10 @@ func (d *Config) GetUUID() string {
 
 func (d *Config) EscapeString(value string) string {
 	switch d.Driver {
-	case "mysql":
+	case DriverMySQL:
 		value = strings.ReplaceAll(value, "'", `\'`)
 		return value
-	case "oracle":
+	case DriverOracle:
 		value = strings.ReplaceAll(value, "'", "''")
 		value = strings.ReplaceAll(value, "&", "' || chr(38) || '")
 		return value
