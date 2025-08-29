@@ -2,73 +2,82 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
+	go_ora "github.com/sijms/go-ora/v2"
 	wl_uuid "github.com/wsva/lib_go/uuid"
+
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
 )
 
-/*
-*************************数据库预定义*************************
- */
+type Config struct {
+	Driver   string
+	User     string
+	Password string
+	Host     string
+	Port     string
+	Database string
+	Schema   string
+	Params   map[string]string
 
-/*
-将多种数据库集成在一个struct里，便于函数间传值
-
-ID是为了在有多个数据库的时候，组成DBMap时能够方便区分
-*/
-type DB struct {
-	ID         string     `json:"ID"`
-	Type       DBType     `json:"Type"`
-	Oracle     Oracle     `json:"Oracle"`
-	MySQL      MySQL      `json:"MySQL"`
-	PostgreSQL PostgreSQL `json:"PostgreSQL"`
-	SQLite     SQLite     `json:"SQLite"`
-
-	DB *sql.DB `json:"-"`
+	DB *sql.DB
 }
 
-func (d *DB) InitDB() error {
-	switch d.Type {
-	case DBTypeMySQL:
-		if d.MySQL.DB == nil {
-			err := d.MySQL.InitDB()
-			if err != nil {
-				return err
-			}
+func (d *Config) InitDB() error {
+	var err error
+	switch d.Driver {
+	case "postgres":
+		dsn := fmt.Sprintf("host=%v port=%v user=%v password=%v dbname=%v",
+			d.Host, d.Port, d.User, d.Password, d.Database)
+		d.DB, err = sql.Open("postgres", dsn)
+	case "mysql":
+		dsn := fmt.Sprintf("%v:%v@%v:%v/%v",
+			d.User, d.Password, d.Host, d.Port, d.Database)
+		d.DB, err = sql.Open("mysql", dsn)
+		/*
+			db.SetConnMaxLifetime(time.Minute * 3) will cause:
+
+			Error 1461: Can't create more than max_prepared_stmt_count
+			statements (current value: 16382)
+		*/
+		if err == nil {
+			d.DB.SetConnMaxLifetime(time.Second * 10)
+			d.DB.SetMaxOpenConns(10)
+			d.DB.SetMaxIdleConns(10)
 		}
-		d.DB = d.MySQL.DB
-	case DBTypeOracle:
-		if d.Oracle.DB == nil {
-			err := d.Oracle.InitDB()
-			if err != nil {
-				return err
-			}
+	case "sqlite", "file":
+		d.DB, err = sql.Open("sqlite", d.Database)
+	case "oracle":
+		port, _ := strconv.ParseInt(d.Port, 10, 32)
+		connStr := ""
+		if v, ok := d.Params["service_name"]; ok && v != "" {
+			connStr = go_ora.BuildUrl(d.Host, int(port), v, d.User, d.Password, nil)
+		} else if v, ok := d.Params["sid"]; ok && v != "" {
+			urlOptions := map[string]string{"SID": v}
+			connStr = go_ora.BuildUrl(d.Host, int(port), "", d.User, d.Password, urlOptions)
+		} else if v, ok := d.Params["jdbc"]; ok && v != "" {
+			urlOptions := map[string]string{"connStr": v}
+			connStr = go_ora.BuildUrl(d.Host, int(port), "", d.User, d.Password, urlOptions)
+		} else {
+			return errors.New("build connection string error")
 		}
-		d.DB = d.Oracle.DB
-	case DBTypeSQLite:
-		if d.SQLite.DB == nil {
-			err := d.SQLite.InitDB()
-			if err != nil {
-				return err
-			}
-		}
-		d.DB = d.SQLite.DB
-	case DBTypePostgreSQL:
-		if d.PostgreSQL.DB == nil {
-			err := d.PostgreSQL.InitDB()
-			if err != nil {
-				return err
-			}
-		}
-		d.DB = d.PostgreSQL.DB
+		d.DB, err = sql.Open("oracle", connStr)
 	default:
-		return fmt.Errorf("unsupported db type: %v", d.Type)
+		return fmt.Errorf("unsupported db type: %v", d.Driver)
 	}
-	return nil
+
+	if err != nil {
+		return err
+	}
+	return d.DB.Ping()
 }
 
-func (d *DB) Close() error {
+func (d *Config) Close() error {
 	return d.DB.Close()
 }
 
@@ -93,7 +102,7 @@ Begin inits a transaction
 	    log.Fatal("commit failed:", err)
 	}
 */
-func (d *DB) Begin() (*sql.Tx, error) {
+func (d *Config) Begin() (*sql.Tx, error) {
 	err := d.InitDB()
 	if err != nil {
 		return nil, err
@@ -101,7 +110,7 @@ func (d *DB) Begin() (*sql.Tx, error) {
 	return d.DB.Begin()
 }
 
-func (d *DB) QueryRow(query string, args ...any) (*sql.Row, error) {
+func (d *Config) QueryRow(query string, args ...any) (*sql.Row, error) {
 	err := d.InitDB()
 	if err != nil {
 		return nil, err
@@ -109,7 +118,7 @@ func (d *DB) QueryRow(query string, args ...any) (*sql.Row, error) {
 	return d.DB.QueryRow(query, args...), nil
 }
 
-func (d *DB) Query(query string, args ...any) (*sql.Rows, error) {
+func (d *Config) Query(query string, args ...any) (*sql.Rows, error) {
 	err := d.InitDB()
 	if err != nil {
 		return nil, err
@@ -117,7 +126,7 @@ func (d *DB) Query(query string, args ...any) (*sql.Rows, error) {
 	return d.DB.Query(query, args...)
 }
 
-func (d *DB) Query2MapList(limit int, query string, args ...any) ([]any, error) {
+func (d *Config) Query2MapList(limit int, query string, args ...any) ([]any, error) {
 	err := d.InitDB()
 	if err != nil {
 		return nil, err
@@ -197,7 +206,7 @@ func (d *DB) Query2MapList(limit int, query string, args ...any) ([]any, error) 
 }
 
 // affected, err := result.RowsAffected()
-func (d *DB) Exec(query string, args ...any) (sql.Result, error) {
+func (d *Config) Exec(query string, args ...any) (sql.Result, error) {
 	err := d.InitDB()
 	if err != nil {
 		return nil, err
@@ -205,16 +214,16 @@ func (d *DB) Exec(query string, args ...any) (sql.Result, error) {
 	return d.DB.Exec(query, args...)
 }
 
-func (d *DB) GetUUID() string {
+func (d *Config) GetUUID() string {
 	var sqltext string
-	switch d.Type {
-	case DBTypeMySQL:
+	switch d.Driver {
+	case "mysql":
 		sqltext = "select uuid()"
-	case DBTypeOracle:
+	case "oracle":
 		sqltext = "select rawtohex(sys_guid()) from dual"
-	case DBTypeSQLite:
+	case "sqlite":
 		sqltext = "select hex(randomblob(16))"
-	case DBTypePostgreSQL:
+	case "postgres":
 		sqltext = "select replace(uuid_generate_v4()::text, '-', '')"
 	default:
 		return strings.ReplaceAll(wl_uuid.New(), "-", "")
@@ -231,12 +240,15 @@ func (d *DB) GetUUID() string {
 	return f1.String
 }
 
-func (d *DB) EscapeString(value string) string {
-	switch d.Type {
-	case DBTypeMySQL:
-		return d.MySQL.EscapeString(value)
-	case DBTypeOracle:
-		return d.Oracle.EscapeString(value)
+func (d *Config) EscapeString(value string) string {
+	switch d.Driver {
+	case "mysql":
+		value = strings.ReplaceAll(value, "'", `\'`)
+		return value
+	case "oracle":
+		value = strings.ReplaceAll(value, "'", "''")
+		value = strings.ReplaceAll(value, "&", "' || chr(38) || '")
+		return value
 	}
 	return value
 }

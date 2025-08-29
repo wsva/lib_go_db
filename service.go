@@ -73,7 +73,7 @@ func NewQueryResultList() *QueryResultList {
 *************************all databases*************************
  */
 //ID as key
-type DBMap map[string]*DB
+type DBMap map[string]*Config
 
 func (m DBMap) Query2MapList(req *SqlReq, limit int) ([]any, error) {
 	db, ok := m[req.ID]
