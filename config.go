@@ -34,6 +34,11 @@ func (d *Config) InitDB() error {
 	case DriverPostgreSQL:
 		dsn := fmt.Sprintf("host=%v port=%v user=%v password=%v dbname=%v",
 			d.Host, d.Port, d.User, d.Password, d.Database)
+		if v, ok := d.Params["sslmode"]; ok && v != "" {
+			dsn += " sslmode=" + v // enable or disable
+		} else {
+			dsn += " sslmode=disable"
+		}
 		d.DB, err = sql.Open("postgres", dsn)
 	case DriverMySQL:
 		dsn := fmt.Sprintf("%v:%v@%v:%v/%v",
