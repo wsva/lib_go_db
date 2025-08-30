@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	go_ora "github.com/sijms/go-ora/v2"
 	wl_uuid "github.com/wsva/lib_go/uuid"
@@ -44,17 +43,6 @@ func (d *Config) InitDB() error {
 		dsn := fmt.Sprintf("%v:%v@%v:%v/%v",
 			d.User, d.Password, d.Host, d.Port, d.Database)
 		d.DB, err = sql.Open("mysql", dsn)
-		/*
-			db.SetConnMaxLifetime(time.Minute * 3) will cause:
-
-			Error 1461: Can't create more than max_prepared_stmt_count
-			statements (current value: 16382)
-		*/
-		if err == nil {
-			d.DB.SetConnMaxLifetime(time.Second * 10)
-			d.DB.SetMaxOpenConns(10)
-			d.DB.SetMaxIdleConns(10)
-		}
 	case DriverSQLite:
 		d.DB, err = sql.Open("sqlite", d.Database)
 	case DriverOracle:
@@ -79,7 +67,15 @@ func (d *Config) InitDB() error {
 	if err != nil {
 		return err
 	}
-	return d.DB.Ping()
+	err = d.DB.Ping()
+	if err != nil {
+		return err
+	}
+
+	d.DB.SetMaxOpenConns(10)   // 最大打开连接数
+	d.DB.SetMaxIdleConns(5)    // 最大空闲连接数
+	d.DB.SetConnMaxLifetime(0) // 连接最大生命周期，0 表示无限制
+	return nil
 }
 
 func (d *Config) Close() error {
