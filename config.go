@@ -29,6 +29,11 @@ type Config struct {
 
 func (d *Config) InitDB() error {
 	var err error
+
+	if d.DB != nil && d.DB.Ping() == nil {
+		return nil
+	}
+
 	switch d.Driver {
 	case DriverPostgreSQL:
 		dsn := fmt.Sprintf("host=%v port=%v user=%v password=%v dbname=%v",
